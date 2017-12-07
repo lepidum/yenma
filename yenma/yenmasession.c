@@ -41,6 +41,9 @@ YenmaSession_new(YenmaContext *yenmactx)
 
     self->ctx = yenmactx;
     self->keep_leading_header_space = false;
+    // Virtual DMARC setting
+    self->virtual_dmarc = (yenmactx->cfg->vdmarc_verification == VDMARC_VERIFICATION_MODE_STRICT || yenmactx->cfg->vdmarc_verification == VDMARC_VERIFICATION_MODE_RELAX);
+    self->vdmarc_strict_mode = yenmactx->cfg->vdmarc_verification == VDMARC_VERIFICATION_MODE_STRICT;
 
     self->delauthhdr = IntArray_new(0);
     if (NULL == self->delauthhdr) {

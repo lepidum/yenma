@@ -33,7 +33,14 @@ typedef enum {
     CONFIG_TYPE_TIME,           // time_t
     CONFIG_TYPE_SYSLOG_FACILITY,    // syslog facility (int)
     CONFIG_TYPE_LOG_LEVEL,      // log level (int)
+    CONFIG_TYPE_VDMARC_VERIFICATION_MODE, // vdmarc verification mode (int)
 } ConfigType;
+
+typedef enum {
+  VDMARC_VERIFICATION_MODE_STRICT, // "strict"
+  VDMARC_VERIFICATION_MODE_RELAX,  // "relax"
+  VDMARC_VERIFICATION_MODE_NONE,   // "none"
+} VdmarcVerificationMode;
 
 typedef struct ConfigEntry {
     // name of the config entry

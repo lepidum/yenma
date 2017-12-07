@@ -399,6 +399,35 @@ ConfigLoader_setLogLevel(const ConfigEntry *entry, void *storage, const char *va
     return true;
 }   // end function: ConfigLoader_setLogLevel
 
+static const KeywordMap vdmarc_verification_mode_table[] = {
+    {"strict", VDMARC_VERIFICATION_MODE_STRICT},
+    {"relax", VDMARC_VERIFICATION_MODE_RELAX},
+    {"none", VDMARC_VERIFICATION_MODE_NONE},
+    {NULL, -1}, // sentinel
+};
+
+/**
+ * vdmarc verification mode 型の設定項目を設定する.
+ *
+ * @param entry
+ * @param storage
+ * @param value
+ * @return true on success, false on failure.
+ */
+static bool
+ConfigLoader_setVdmarcVerificationMode(const ConfigEntry *entry, void *storage, const char*value)
+{
+    int vdmarc_verification_mode = KeywordMap_lookupByCaseString(vdmarc_verification_mode_table, value);
+    if (-1 == vdmarc_verification_mode) {
+        LogError("failed to parse the config entry value: entry=%s, type=vdmarc_verification_mode, value=%s",
+                 entry->name, value);
+        return false;
+    }   // end if
+    int *vdmarc_verification_mode_pointer = storage;
+    *vdmarc_verification_mode_pointer = vdmarc_verification_mode;
+    return true;
+}   // end function: ConfigLoader_setVdmarcVerificationMode
+
 /**
  * 設定項目に値を設定する.
  *
@@ -445,6 +474,9 @@ ConfigLoader_setEntryValue(ConfigStorageBase *config, const ConfigEntry *entry, 
         break;
     case CONFIG_TYPE_LOG_LEVEL:
         set_stat = ConfigLoader_setLogLevel(entry, storage, value);
+        break;
+    case CONFIG_TYPE_VDMARC_VERIFICATION_MODE:
+        set_stat = ConfigLoader_setVdmarcVerificationMode(entry, storage, value);
         break;
     default:
         LogError("unknown config entry type: type=%d, entry=%s", entry->value_type, entry->name);
@@ -780,6 +812,18 @@ ConfigLoader_dump(const ConfigStorageBase *config)
             const char *facility_name =
                 KeywordMap_lookupByValue(syslog_facility_table, *(int *) value);
             LogPlain("  %s: %s", p->name, PTROR(facility_name, "(empty)"));
+            break;
+
+        case CONFIG_TYPE_LOG_LEVEL:;
+            const char *log_level_name =
+                KeywordMap_lookupByValue(log_level_table, *(int *) value);
+            LogPlain("  %s: %s", p->name, PTROR(log_level_name, "(empty)"));
+            break;
+
+        case CONFIG_TYPE_VDMARC_VERIFICATION_MODE:;
+            const char *vdmarc_verification_mode_name =
+                KeywordMap_lookupByValue(vdmarc_verification_mode_table, *(int *) value);
+            LogPlain("  %s: %s", p->name, PTROR(vdmarc_verification_mode_name, "(empty)"));
             break;
 
         default:
