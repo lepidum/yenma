@@ -535,7 +535,7 @@ yenma_sidfv_eom(YenmaSession *session)
 static bool
 yenma_dmarcv_eom(YenmaSession *session)
 {
-    DkimStatus dmarc_stat = DmarcAligner_new(session->ctx->public_suffix, session->resolver, &session->aligner);
+    DkimStatus dmarc_stat = DmarcAligner_new(session->ctx->public_suffix, session->resolver, session->virtual_dmarc, session->vdmarc_strict_mode, &session->aligner);
     if (DSTAT_OK != dmarc_stat) {
         LogNoResource();
         return false;

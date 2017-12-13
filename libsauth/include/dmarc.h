@@ -26,6 +26,7 @@ typedef enum DmarcScore {
     DMARC_SCORE_NULL = 0,
     DMARC_SCORE_NONE,
     DMARC_SCORE_PASS,
+    DMARC_SCORE_BESTGUESSPASS,
     DMARC_SCORE_FAIL,
     DMARC_SCORE_POLICY,
     DMARC_SCORE_TEMPERROR,
@@ -43,7 +44,7 @@ typedef enum DmarcReceiverPolicy {
 typedef struct DmarcAligner DmarcAligner;
 typedef struct PublicSuffix PublicSuffix;
 
-extern DkimStatus DmarcAligner_new(const PublicSuffix *publicsuffix, DnsResolver *resolver, DmarcAligner **aligner);
+extern DkimStatus DmarcAligner_new(const PublicSuffix *publicsuffix, DnsResolver *resolver, bool virtual_dmarc1, bool strict_mode, DmarcAligner **aligner);
 extern void DmarcAligner_free(DmarcAligner *self);
 extern DmarcScore DmarcAligner_check(DmarcAligner *self, InetMailHeaders *headers,
         const DkimVerifier *dkimverifier, SpfEvaluator *spfevaluator);

@@ -27,6 +27,9 @@
 #include "dmarc.h"
 #include "dmarcrecord.h"
 
+#define DMARC_DEFAULT_BESTGUESSPASS_RECORD_WITH_STRICT_MODE "v=DMARC1; adkim=s; aspf=s; p=none"
+#define DMARC_DEFAULT_BESTGUESSPASS_RECORD_WITH_RELAXED_MODE "v=DMARC1; adkim=r; aspf=r; p=none"
+
 struct DmarcAligner {
     const char *authordomain;
     const char *orgl_authordomain;
@@ -39,6 +42,10 @@ struct DmarcAligner {
 
     DmarcRecord *record;
     DkimStatus record_stat;
+    bool virtual_dmarc;  // virtual DMARC ON/OFF flag
+    bool verified_virtually;  // using default DMARC record flag
+    bool is_vdmarc_mode_strict;  // use default DMARC record with strict mode flag
+                                 // valid only if virtual_dmarc = true
 };
 
 static DmarcReceiverPolicy
@@ -68,6 +75,22 @@ DmarcAligner_retrieveRecord(DmarcAligner *self)
         self->record_stat = DSTAT_INFO_FINISHED;
         return DSTAT_OK;
     case DSTAT_INFO_DNSRR_NOT_EXIST:
+        if (self->virtual_dmarc) {
+            // When no DMARC records exist for the domain
+            // and virtual DMARC is enabled,
+            // we verify the domain with a virtual dmarc record.
+            self->verified_virtually = true;
+            self->record_stat = DSTAT_INFO_FINISHED;
+            DkimStatus build_stat = DmarcRecord_build(
+                self->authordomain,
+                self->is_vdmarc_mode_strict ?
+                      DMARC_DEFAULT_BESTGUESSPASS_RECORD_WITH_STRICT_MODE
+                    : DMARC_DEFAULT_BESTGUESSPASS_RECORD_WITH_RELAXED_MODE,
+                &self->record
+            );
+
+            return build_stat;
+        }
         /*
          * [draft-kucherawy-dmarc-base-02] 16.2.
          * Code:  none
@@ -120,16 +143,34 @@ DmarcAligner_checkStrictly(DmarcAligner *self, const char *domain)
 static DkimStatus
 DmarcAligner_checkRelaxedly(DmarcAligner *self, const char *domain)
 {
-    if (DMARC_ALIGN_MODE_RELAXED == DmarcRecord_getDkimAlignmentMode(self->record)) {
-        const char *orgl_domain = PublicSuffix_getOrganizationalDomain(self->publicsuffix, domain);
-        if (NULL != orgl_domain && InetDomain_equals(orgl_domain, self->orgl_authordomain)) {
-            self->score = DMARC_SCORE_PASS;
-            return DSTAT_INFO_FINISHED;
-        }   // end if
+    const char *orgl_domain = PublicSuffix_getOrganizationalDomain(self->publicsuffix, domain);
+    if (NULL != orgl_domain && InetDomain_equals(orgl_domain, self->orgl_authordomain)) {
+        self->score = DMARC_SCORE_PASS;
+        return DSTAT_INFO_FINISHED;
     }   // end if
 
     return DSTAT_OK;
 }   // end function: DmarcAligner_checkRelaxedly
+
+static DkimStatus
+DmarcAligner_checkDkimRelaxedly(DmarcAligner *self, const char *domain)
+{
+    if (DMARC_ALIGN_MODE_RELAXED == DmarcRecord_getDkimAlignmentMode(self->record)) {
+        return DmarcAligner_checkRelaxedly(self, domain);
+    }   // end if
+
+    return DSTAT_OK;
+}   // end function: DmarcAligner_checkDkimRelaxedly
+
+static DkimStatus
+DmarcAligner_checkSpfRelaxedly(DmarcAligner *self, const char *domain)
+{
+    if (DMARC_ALIGN_MODE_RELAXED == DmarcRecord_getSpfAlignmentMode(self->record)) {
+        return DmarcAligner_checkRelaxedly(self, domain);
+    }   // end if
+
+    return DSTAT_OK;
+}   // end function: DmarcAligner_checkSpfRelaxedly
 
 static DkimStatus
 DmarcAligner_checkDkimAlignment(DmarcAligner *self, bool strict_mode)
@@ -151,7 +192,7 @@ DmarcAligner_checkDkimAlignment(DmarcAligner *self, bool strict_mode)
             continue;
         }   // end if
         DkimStatus dstat = strict_mode ? DmarcAligner_checkStrictly(self, result->sdid)
-            : DmarcAligner_checkRelaxedly(self, result->sdid);
+            : DmarcAligner_checkDkimRelaxedly(self, result->sdid);
         if (DSTAT_OK != dstat) {
             return dstat;
         }   // end if
@@ -173,7 +214,7 @@ DmarcAligner_checkSpfAlignment(DmarcAligner *self, bool strict_mode)
 
     const char *spf_auth_domain = SpfEvaluator_getEvaluatedDomain(self->evaluator);
     return strict_mode ? DmarcAligner_checkStrictly(self, spf_auth_domain)
-        : DmarcAligner_checkRelaxedly(self, spf_auth_domain);
+        : DmarcAligner_checkSpfRelaxedly(self, spf_auth_domain);
 }   // end function: DmarcAligner_checkSpfAlignment
 
 static DkimStatus
@@ -241,6 +282,8 @@ DmarcAligner_check(DmarcAligner *self, InetMailHeaders *headers,
     self->evaluator = spfevaluator;
     self->record = NULL;
     self->record_stat = DSTAT_OK;
+    // Virtual DMARC process setting. (default:false)
+    self->verified_virtually = false;
 
     DkimStatus record_stat = DmarcAligner_retrieveRecord(self);
     if (DSTAT_OK != record_stat) {
@@ -260,6 +303,12 @@ DmarcAligner_check(DmarcAligner *self, InetMailHeaders *headers,
             return self->score;
         }   // end if
     }   // end if
+
+    if (self->virtual_dmarc && self->verified_virtually) {
+        // If DKIM and SPF authentication do not pass, score is set to NONE
+        self->score = DMARC_SCORE_NONE;
+        return self->score;
+    }
 
     /*
      * [draft-kucherawy-dmarc-base-02] 16.2.
@@ -291,6 +340,7 @@ DmarcAligner_getReceiverPolicy(DmarcAligner *self, bool apply_sampling_rate)
     case DMARC_SCORE_NULL:  // DMARC evaluation is turned off.
     case DMARC_SCORE_NONE:
     case DMARC_SCORE_PASS:
+    case DMARC_SCORE_BESTGUESSPASS:
     case DMARC_SCORE_TEMPERROR: // memory allocation failure or DNS lookup failure
     case DMARC_SCORE_PERMERROR: // DMARC record is (syntactically) broken.
         return self->policy = DMARC_RECEIVER_POLICY_NONE;
@@ -327,8 +377,9 @@ DmarcAligner_free(DmarcAligner *self)
     free(self);
 }   // end function: DmarcAligner_free
 
+// Add parameter of Virtual DMARC flag
 DkimStatus
-DmarcAligner_new(const PublicSuffix *publicsuffix, DnsResolver *resolver, DmarcAligner **aligner)
+DmarcAligner_new(const PublicSuffix *publicsuffix, DnsResolver *resolver, bool virtual_dmarc, bool is_vdmarc_mode_strict,  DmarcAligner **aligner)
 {
     DmarcAligner *self = (DmarcAligner *) malloc(sizeof(DmarcAligner));
     if (NULL == self) {
@@ -340,6 +391,9 @@ DmarcAligner_new(const PublicSuffix *publicsuffix, DnsResolver *resolver, DmarcA
     self->policy = DMARC_RECEIVER_POLICY_NULL;
     self->publicsuffix = publicsuffix;
     self->resolver = resolver;
+    // Virtual DMARC setting
+    self->virtual_dmarc = virtual_dmarc;
+    self->is_vdmarc_mode_strict = is_vdmarc_mode_strict;
 
     *aligner = self;
     return DSTAT_OK;

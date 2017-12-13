@@ -54,6 +54,9 @@ typedef struct YenmaSession {
     // the attributes to delete the Authentication-Results header(s)
     int authhdr_count;          // the number of Authentication-Results headers
     IntArray *delauthhdr;       // the array of the indexes of Authentication-Results headers to delete
+    // Virtual DMARC flag definition
+    bool virtual_dmarc;
+    bool vdmarc_strict_mode;
 } YenmaSession;
 
 extern YenmaSession *YenmaSession_new(YenmaContext *yenmactx);
