@@ -54,7 +54,7 @@
 
   6. Editing the configuration file
 
-    $ sudo vi /etc/yenma.conf
+    $ sudo vi /usr/local/etc/yenma.conf
 
   7. Creating the directory for the PID file
 
@@ -68,7 +68,7 @@
 
   8. Executing
 
-    $ sudo /usr/local/libexec/yenma -c /etc/yenma.conf
+    $ sudo /usr/local/libexec/yenma -c /usr/local/etc/yenma.conf
 
 * Configuring MTA
 

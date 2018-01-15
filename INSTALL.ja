@@ -55,7 +55,7 @@
 
   6. 設定ファイルの編集
 
-    $ sudo vi /etc/yenma.conf
+    $ sudo vi /usr/local/etc/yenma.conf
 
   7. PID ファイル用ディレクトリの作成
 
@@ -70,7 +70,7 @@
 
   8. 起動
 
-    $ sudo /usr/local/libexec/yenma -c /etc/yenma.conf
+    $ sudo /usr/local/libexec/yenma -c /usr/local/etc/yenma.conf
 
 * MTA の設定
 
