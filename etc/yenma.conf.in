@@ -39,7 +39,7 @@ DkimAdsp.Verify: false
 
 ## DMARC
 Dmarc.Verify: true
-Dmarc.VdmarcVerification: relax
+Dmarc.VdmarcVerification: none
 Dmarc.PublicSuffixList: @expanded_sysconfdir@/effective_tld_names.dat
 Dmarc.RejectAction: reject
 Dmarc.RejectReplyCode: 550
